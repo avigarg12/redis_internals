@@ -4,8 +4,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/redis_internals/config"
-	"github.com/redis_internals/server"
+	"redis_internals/config"
+	"redis_internals/server"
 )
 
 func setupFlags() {

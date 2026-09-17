@@ -1,4 +1,3 @@
-module github.com/dicedb/dice
-
+module redis_internals
 
 go 1.23

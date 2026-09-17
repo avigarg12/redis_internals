@@ -6,13 +6,10 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/dicedb/dice/config"
+	"redis_internals/config"
 )
 
 func readCommand(c net.Conn) (string, error) {
-	// TODO: Max read in one shot is 512 bytes
-	// To allow input > 512 bytes, then repeated read until
-	// we get EOF or designated delimiter
 	var buf []byte = make([]byte, 512)
 	n, err := c.Read(buf[:])
 	if err != nil {
