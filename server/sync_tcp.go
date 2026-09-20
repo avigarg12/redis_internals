@@ -12,7 +12,7 @@ import (
 	"redis_internals/core"
 )
 
-func readCommand(c net.Conn) (*core.RedisCmd, error) {
+func readCommand(c io.ReadWriter) (*core.RedisCmd, error) {
 	var buf []byte = make([]byte, 512)
 	n, err := c.Read(buf[:])
 	if err != nil {
@@ -30,14 +30,14 @@ func readCommand(c net.Conn) (*core.RedisCmd, error) {
 	}, nil
 }
 
-func respondError(err error, c net.Conn){
-	c.Write([]byte(fmt.Sprintf("-%s\r\n",err)))
+func respondError(err error, c io.ReadWriter) {
+	c.Write([]byte(fmt.Sprintf("-%s\r\n", err)))
 }
 
-func respond(cmd *core.RedisCmd, c net.Conn) {
-	err := core.EvalAndRespond(cmd,c)
+func respond(cmd *core.RedisCmd, c io.ReadWriter) {
+	err := core.EvalAndRespond(cmd, c)
 	if err != nil {
-		respondError(err,c)
+		respondError(err, c)
 	}
 }
 
@@ -49,14 +49,15 @@ func RunSyncTCPServer() {
 	// listening to the configured host:port
 	lsnr, err := net.Listen("tcp", config.Host+":"+strconv.Itoa(config.Port))
 	if err != nil {
-		panic(err)
+		log.Println("err", err)
+		return
 	}
 
 	for {
 		// blocking call: waiting for the new client to connect
 		c, err := lsnr.Accept()
 		if err != nil {
-			panic(err)
+			log.Println("err", err)
 		}
 
 		// increment the number of concurrent clients
