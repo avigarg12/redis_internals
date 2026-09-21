@@ -6,6 +6,7 @@ import (
 	"redis_internals/config"
 	"redis_internals/core"
 	"syscall"
+	"time"
 )
 
 func RunAsyncTCPServer() error {
@@ -69,6 +70,12 @@ func RunAsyncTCPServer() error {
 	}
 
 	for {
+		// cron key expiration to be ran
+		if time.Now().After(lastCronExecTime.Add(cronFrequency)) {
+			core.DeleteExpiredKeys()
+			lastCronExecTime = time.Now()
+		}
+
 		// see if any FD is ready for an IO
 		nevents, e := syscall.Kevent(
 			kqueueFD,
