@@ -1,6 +1,9 @@
 package core
 
-import "time"
+import (
+	"redis_internals/config"
+	"time"
+)
 
 var store map[string]*Obj
 
@@ -26,6 +29,9 @@ func NewObj(value interface{}, durationMs int64) *Obj {
 }
 
 func Put(k string, obj *Obj) {
+	if len(store) >= config.KeyLimit {
+		evict()
+	}
 	store[k] = obj
 }
 
