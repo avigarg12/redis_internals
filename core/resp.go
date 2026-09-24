@@ -1,26 +1,11 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 )
 
-// func DecodeArrayString(data []byte) ([]string, error) {
-// 	value, err := Decode(data)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	ts := value.([]interface{})
-
-// 	tokens := make([]string, len(ts))
-
-// 	for i := range tokens {
-// 		tokens[i] = ts[i].(string)
-// 	}
-
-//		return tokens, nil
-//	}
 func readLength(data []byte) (int, int) {
 	pos, length := 0, 0
 
@@ -136,17 +121,28 @@ func Decode(data []byte) ([]interface{}, error) {
 	return values, nil
 }
 
+func encodeString(v string) []byte {
+	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v))
+}
+
 func Encode(value interface{}, isSimple bool) []byte {
 	switch v := value.(type) {
 	case string:
 		if isSimple {
 			return []byte(fmt.Sprintf("+%s\r\n", v))
 		}
-		return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v))
+		return encodeString(v)
 	case int, int8, int16, int32, int64:
 		return []byte(fmt.Sprintf(":%d\r\n", v))
 	case error:
 		return []byte(fmt.Sprintf("-%s\r\n", v))
+	case []string:
+		var b []byte
+		buf := bytes.NewBuffer(b)
+		for _, b := range value.([]string) {
+			buf.Write(encodeString(b))
+		}
+		return []byte(fmt.Sprintf("*%d\r\n%s", len(v), buf.Bytes()))
 	default:
 		return RESP_NIL
 	}
