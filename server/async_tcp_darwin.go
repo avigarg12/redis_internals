@@ -3,13 +3,37 @@ package server
 import (
 	"log"
 	"net"
+	"os"
 	"redis_internals/config"
 	"redis_internals/core"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
 
-func RunAsyncTCPServer() error {
+func WaitForSignal(wg *sync.WaitGroup, sigs chan os.Signal) {
+	defer wg.Done()
+	<-sigs
+
+	// if server is busy continue to wait
+	for atomic.LoadInt32(&eStatus) == EngineStatus_BUSY {
+	}
+
+	// CRITICAL TO HANDLE
+	// we donot want our server to go back to BUSY when the control flow is here
+	atomic.StoreInt32(&eStatus, EngineStatus_SHUTTING_DOWN)
+
+	core.Shutdown()
+	os.Exit(0)
+}
+
+func RunAsyncTCPServer(wg *sync.WaitGroup) error {
+	defer wg.Done()
+	defer func() {
+		atomic.StoreInt32(&eStatus, EngineStatus_SHUTTING_DOWN)
+	}()
+
 	log.Println("starting an asychronous TCP server on", config.Host, config.Port)
 
 	max_clients := 20000
@@ -69,12 +93,21 @@ func RunAsyncTCPServer() error {
 		return err
 	}
 
-	for {
+	// loop until the server is not shutting down
+	for atomic.LoadInt32(&eStatus) != EngineStatus_SHUTTING_DOWN {
+
 		// cron key expiration to be ran
 		if time.Now().After(lastCronExecTime.Add(cronFrequency)) {
 			core.DeleteExpiredKeys()
 			lastCronExecTime = time.Now()
 		}
+
+		/*
+			Say, the Engine triggered SHUTTING down when the control flow is here ->
+			Current: Engine status == WAITING
+			Update: Engine status = SHUTTING_DOWN
+			then we have to exit
+		*/
 
 		// see if any FD is ready for an IO
 		nevents, e := syscall.Kevent(
@@ -85,6 +118,18 @@ func RunAsyncTCPServer() error {
 		)
 		if e != nil {
 			continue
+		}
+
+		// We dont want our server to back from SHUTTING DOWN to BUSY
+		// If the engine status == SHUTTING_DOWN we want to exit
+		// Hence the only legal transition is from WAITING to BUSY
+		// mark engine as BUSY only when it is in the WAITING_STATE
+		if !atomic.CompareAndSwapInt32(&eStatus, EngineStatus_WAITING, EngineStatus_BUSY) {
+			// if swap unsuccessfull then the existing status is not WAITING, but something else
+			switch eStatus {
+			case EngineStatus_SHUTTING_DOWN:
+				return nil
+			}
 		}
 
 		for i := 0; i < nevents; i++ {
@@ -99,7 +144,7 @@ func RunAsyncTCPServer() error {
 
 				// increase the number of concurrent clients count
 				con_clients++
-				log.Println("client connected with address:", "concurrent clients", con_clients)
+				// log.Println("client connected with address:", "concurrent clients", con_clients)
 				syscall.SetNonblock(fd, true)
 
 				// add this new TCP connection to be monitored
@@ -123,12 +168,16 @@ func RunAsyncTCPServer() error {
 				if err != nil {
 					syscall.Close(int(events[i].Ident))
 					con_clients -= 1
-					log.Println("client connected with address:", "concurrent clients", con_clients)
+					// log.Println("client connected with address:", "concurrent clients", con_clients)
 					continue
 				}
 
 				respond(cmds, comm)
 			}
 		}
+		// no contention as the signal handler is blocked until the engine is BUSY
+		atomic.StoreInt32(&eStatus, EngineStatus_WAITING)
 	}
+
+	return nil
 }

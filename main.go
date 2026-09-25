@@ -3,6 +3,10 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"redis_internals/config"
 	"redis_internals/server"
@@ -18,7 +22,13 @@ func main() {
 	setupFlags()
 	log.Println("rolling dice")
 
-	if err := server.RunAsyncTCPServer(); err != nil {
-		log.Fatal(err)
-	}
+	var sigs chan os.Signal = make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go server.RunAsyncTCPServer(&wg)
+	go server.WaitForSignal(&wg, sigs)
+
+	wg.Wait()
 }

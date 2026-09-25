@@ -24,7 +24,7 @@ func stormSet(wg *sync.WaitGroup) {
 	}
 
 	for {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(700 * time.Millisecond)
 		k, v := getRandomKeyValue()
 		var buf [512]byte
 		cmd := fmt.Sprintf("SET %s %d", k, v)
@@ -48,7 +48,7 @@ func stormSet(wg *sync.WaitGroup) {
 
 func main() {
 	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 1; i++ {
 		wg.Add(1)
 		go stormSet(&wg)
 	}
