@@ -142,8 +142,7 @@ func RunAsyncTCPServer(wg *sync.WaitGroup) error {
 					continue
 				}
 
-				// increase the number of concurrent clients count
-				con_clients++
+				connectedClients[fd] = core.NewClient(fd)
 				// log.Println("client connected with address:", "concurrent clients", con_clients)
 				syscall.SetNonblock(fd, true)
 
@@ -163,11 +162,14 @@ func RunAsyncTCPServer(wg *sync.WaitGroup) error {
 					log.Fatal(err)
 				}
 			} else {
-				comm := core.FDComm{Fd: int(events[i].Ident)}
+				comm := connectedClients[int(events[i].Ident)]
+				if comm == nil {
+					continue
+				}
 				cmds, err := readCommands(comm)
 				if err != nil {
 					syscall.Close(int(events[i].Ident))
-					con_clients -= 1
+					delete(connectedClients, int(events[i].Ident))
 					// log.Println("client connected with address:", "concurrent clients", con_clients)
 					continue
 				}
